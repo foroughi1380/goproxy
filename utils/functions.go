@@ -142,6 +142,18 @@ func getRequestTlsConfig(certBytes, keyBytes []byte) (conf *tls.Config, err erro
 	return
 }
 
+func ConnectToHostWithLocalIP(localIP, hostAndPort string, timeout int) (conn net.Conn, err error) {
+	// Dial with timeout
+	dialer := net.Dialer{
+		Timeout: time.Duration(timeout) * time.Millisecond,
+		LocalAddr: &net.TCPAddr{
+			IP: net.ParseIP(localIP),
+		},
+	}
+	conn, err = dialer.Dial("tcp", hostAndPort)
+	return
+}
+
 func ConnectHost(hostAndPort string, timeout int) (conn net.Conn, err error) {
 	conn, err = net.DialTimeout("tcp", hostAndPort, time.Duration(timeout)*time.Millisecond)
 	return

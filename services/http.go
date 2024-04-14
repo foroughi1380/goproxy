@@ -2,12 +2,13 @@ package services
 
 import (
 	"fmt"
+	"github.com/snail007/goproxy/utils"
 	"io"
 	"log"
 	"net"
-	"github.com/snail007/goproxy/utils"
 	"runtime/debug"
 	"strconv"
+	"strings"
 )
 
 type HTTP struct {
@@ -109,6 +110,19 @@ func (s *HTTP) callback(inConn net.Conn) {
 func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *utils.HTTPRequest) (err error) {
 	inAddr := (*inConn).RemoteAddr().String()
 	inLocalAddr := (*inConn).LocalAddr().String()
+
+	realLocalAddress := ""
+
+	if strings.HasPrefix(inLocalAddr, "[") {
+		realLocalAddress = (strings.Split(inLocalAddr, "]:")[0])[1:]
+	} else {
+		realLocalAddress = strings.Split(inLocalAddr, ":")[0]
+	}
+
+	if realLocalAddress == "127.0.0.1" || realLocalAddress == "::1" {
+		realLocalAddress = ""
+	}
+
 	//防止死循环
 	if s.IsDeadLoop(inLocalAddr, req.Host) {
 		utils.CloseConn(inConn)
@@ -123,7 +137,8 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 			outConn = _outConn.(net.Conn)
 		}
 	} else {
-		outConn, err = utils.ConnectHost(address, *s.cfg.Timeout)
+		//outConn, err = utils.ConnectHost(address, *s.cfg.Timeout)
+		outConn, err = utils.ConnectToHostWithLocalIP(realLocalAddress, address, *s.cfg.Timeout)
 	}
 	if err != nil {
 		log.Printf("connect to %s , err:%s", *s.cfg.Parent, err)
@@ -140,6 +155,7 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 		outConn.Write(req.HeadBuf)
 	}
 	utils.IoBind((*inConn), outConn, func(isSrcErr bool, err error) {
+		log.Println("networkd ", (*inConn).LocalAddr().Network())
 		log.Printf("conn %s - %s - %s -%s released [%s]", inAddr, inLocalAddr, outLocalAddr, outAddr, req.Host)
 		utils.CloseConn(inConn)
 		utils.CloseConn(&outConn)
